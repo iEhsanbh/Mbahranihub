@@ -246,43 +246,62 @@ const ENGLISH_STAGES = [
 
 let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0 }, items: {}, media: [] };
 let fb = null;
-let suppressNextSnapshot = false;
+let pendingSaveTimer = null;
+let firstSnapshotHandled = false;
 
 function setSyncStatus(kind, text) {
   document.getElementById("sync-dot").className = "dot " + kind;
   document.getElementById("sync-text").textContent = text;
 }
 
-async function persist() {
+function mergeDefaults(data) {
+  data = data || {};
+  if (!data.schedule) data.schedule = {};
+  if (!data.stages) data.stages = { violin: 0, python: 0, english: 0 };
+  if (!data.items) data.items = {};
+  if (!data.media) data.media = [];
+  return data;
+}
+
+// Debounced write: always sends the LATEST in-memory state, never a stale copy.
+function persist() {
   if (!fb) return;
   setSyncStatus("busy", "در حال ذخیره...");
-  try {
-    suppressNextSnapshot = true;
-    await fb.setDoc(fb.stateDocRef, state);
-    setSyncStatus("ok", "ذخیره شد و همگام‌سازی شد");
-  } catch (e) {
-    setSyncStatus("err", "خطا در ذخیره — بدون اینترنت؟");
-    console.error(e);
-  }
+  if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
+  pendingSaveTimer = setTimeout(async () => {
+    try {
+      await fb.setDoc(fb.stateDocRef, state);
+      setSyncStatus("ok", "ذخیره شد");
+    } catch (e) {
+      setSyncStatus("err", "خطا در ذخیره — بدون اینترنت؟");
+      console.error(e);
+    }
+  }, 350); // batches rapid clicks into one write instead of racing many writes
 }
 
 function initFirebaseSync() {
   fb = window.__firebase;
   setSyncStatus("busy", "در حال بار کردن داده...");
 
-  fb.onSnapshot(fb.stateDocRef, (snap) => {
-    if (suppressNextSnapshot) { suppressNextSnapshot = false; return; }
+  fb.onSnapshot(fb.stateDocRef, { includeMetadataChanges: true }, (snap) => {
+    // Ignore the optimistic local echo of OUR OWN pending write — it has hasPendingWrites=true
+    // and would otherwise be treated as "new data from another device" even though it's just
+    // our own setDoc bouncing back before the server confirms it.
+    if (snap.metadata.hasPendingWrites) {
+      document.getElementById("loading-screen").style.display = "none";
+      return;
+    }
+
     if (snap.exists()) {
-      state = snap.data();
-      if (!state.schedule) state.schedule = {};
-      if (!state.stages) state.stages = { violin: 0, python: 0, english: 0 };
-      if (!state.items) state.items = {};
-      if (!state.media) state.media = [];
+      state = mergeDefaults(snap.data());
       render();
-      setSyncStatus("ok", "همگام‌سازی شد (تغییر از دستگاه دیگر)");
-    } else {
+      if (firstSnapshotHandled) setSyncStatus("ok", "همگام‌سازی شد (تغییر از دستگاه دیگر)");
+      else setSyncStatus("ok", "متصل شد");
+    } else if (!firstSnapshotHandled) {
+      // Only seed an empty doc on the very first load if nothing exists yet.
       fb.setDoc(fb.stateDocRef, state);
     }
+    firstSnapshotHandled = true;
     document.getElementById("loading-screen").style.display = "none";
   }, (err) => {
     setSyncStatus("err", "اتصال برقرار نشد");

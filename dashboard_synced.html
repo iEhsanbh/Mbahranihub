@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>میزکار روزانه</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBmfzGi_meuxUL6G9o0X5u3fufWEheuSWo",
+    authDomain: "mbahranihub.firebaseapp.com",
+    projectId: "mbahranihub",
+    storageBucket: "mbahranihub.firebasestorage.app",
+    messagingSenderId: "205258612211",
+    appId: "1:205258612211:web:357aa46c08b3f463a74686"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const stateDocRef = doc(db, "dashboard", "state");
+
+  // Expose to the non-module script below
+  window.__firebase = { db, stateDocRef, getDoc, setDoc, onSnapshot };
+  window.__firebaseReady = true;
+  window.dispatchEvent(new Event("firebase-ready"));
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Tahoma, 'Vazirmatn', sans-serif;
+    background: #1a1a1f;
+    color: #e8e6e0;
+    padding: 16px;
+    max-width: 720px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+  .sub { color: #9a9890; font-size: 14px; margin-bottom: 8px; }
+  .sync-status { font-size: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6a6860; }
+  .dot.ok { background: #1d9e75; }
+  .dot.busy { background: #d4a72c; }
+  .dot.err { background: #e24b4a; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #333;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #9a9890;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab.active { color: #e8e6e0; border-bottom-color: #d4537e; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: #24242b;
+    border: 0.5px solid #3a3a42;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .time { font-size: 13px; color: #9a9890; min-width: 78px; }
+  .task { flex: 1; font-size: 15px; }
+  .task.done { text-decoration: line-through; color: #6a6860; }
+  input[type=checkbox] {
+    width: 20px; height: 20px; accent-color: #1d9e75; cursor: pointer; flex-shrink: 0;
+  }
+  .stage-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: #534ab7;
+    color: #cecbf6;
+    margin-bottom: 8px;
+  }
+  .track-title { font-size: 17px; font-weight: 500; margin-bottom: 2px; }
+  .resource {
+    display: block;
+    font-size: 13px;
+    color: #85b7eb;
+    margin: 4px 0;
+    text-decoration: none;
+  }
+  .progress-bar {
+    height: 6px;
+    background: #3a3a42;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 10px 0;
+  }
+  .progress-fill { height: 100%; background: #1d9e75; border-radius: 4px; transition: width .3s; }
+  button {
+    background: transparent;
+    border: 0.5px solid #4a4a52;
+    color: #e8e6e0;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { background: #2e2e36; }
+  button.primary { background: #1d9e75; border-color: #1d9e75; color: #fff; }
+  .log-entry { border-bottom: 0.5px solid #333; padding: 10px 0; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-title { font-weight: 500; font-size: 14px; }
+  .log-meta { font-size: 12px; color: #9a9890; margin: 2px 0; }
+  .log-note { font-size: 13px; color: #b8b6ae; margin-top: 4px; }
+  textarea, input[type=text], select {
+    width: 100%;
+    background: #1a1a1f;
+    border: 0.5px solid #4a4a52;
+    color: #e8e6e0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    margin: 4px 0;
+  }
+  textarea { resize: vertical; min-height: 50px; }
+  .label-sm { font-size: 12px; color: #9a9890; margin-bottom: 3px; display: block; }
+  .empty-msg { color: #6a6860; font-size: 14px; text-align: center; padding: 20px 0; }
+  .delete-btn { color: #e24b4a; cursor: pointer; font-size: 12px; }
+  .day-divider { font-size: 12px; color: #6a6860; margin: 16px 0 8px; text-transform: uppercase; }
+  .loading-screen {
+    position: fixed; inset: 0; background: #1a1a1f;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #9a9890; z-index: 999;
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loading-screen">در حال اتصال به دیتابیس...</div>
+
+<h1>میزکار روزانه</h1>
+<div class="sub" id="today-date"></div>
+<div class="sync-status"><span class="dot" id="sync-dot"></span><span id="sync-text">در حال اتصال...</span></div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="schedule">برنامه روز</div>
+  <div class="tab" data-tab="violin">ویولن</div>
+  <div class="tab" data-tab="python">پایتون</div>
+  <div class="tab" data-tab="english">انگلیسی</div>
+  <div class="tab" data-tab="media">کتاب و فیلم</div>
+</div>
+
+<div class="panel active" id="panel-schedule"></div>
+<div class="panel" id="panel-violin"></div>
+<div class="panel" id="panel-python"></div>
+<div class="panel" id="panel-english"></div>
+<div class="panel" id="panel-media"></div>
+
+<script>
+const todayKey = () => new Date().toISOString().slice(0,10);
+
+const SCHEDULE = [
+  ["۰۷:۰۰", "بیدار شدن + آب خوردن"],
+  ["۰۷:۱۵", "صبحانه"],
+  ["۰۸:۰۰", "زبان انگلیسی"],
+  ["۰۹:۰۰", "پایتون"],
+  ["۱۰:۰۰", "مرتب کردن کامپیوتر (همراه موزیک)"],
+  ["۱۱:۰۰", "استراحت"],
+  ["۱۲:۰۰", "ناهار"],
+  ["۱۳:۰۰", "ویولن (بخش ۱)"],
+  ["۱۴:۳۰", "استراحت کوتاه"],
+  ["۱۴:۴۵", "ویولن (بخش ۲)"],
+  ["۱۶:۰۰", "کتاب خوندن (همراه موزیک)"],
+  ["۱۷:۰۰", "وقت آزاد / پیاده‌روی"],
+  ["۱۹:۰۰", "شام"],
+  ["۲۰:۰۰", "فیلم یا سریال"],
+  ["۲۲:۰۰", "کتاب خوندن یا وقت آزاد"],
+  ["۲۳:۳۰", "آماده شدن برای خواب"],
+  ["۰۱:۰۰", "خواب"],
+];
+
+const VIOLIN_STAGES = [
+  { title: "مرحله ۱ — آشنایی با ساز (هفته ۱-۲)",
+    items: [
+      "شناخت اجزای ویولن: کمان، سیم‌ها (G D A E)، خرک، گوشی‌ها",
+      "یادگیری درست نگه‌داشتن ساز و کمان (پوسچر مهم‌تر از سرعت یادگیریه)",
+      "کوک کردن ساز با اپ تیونر (مثل Tuner Lite یا insTuner)",
+      "تمرین کشیدن کمان روی سیم‌های باز بدون انگشت گذاشتن",
+    ],
+    resources: [
+      ["یوتیوب — Violin Lounge", "https://www.youtube.com/@ViolinLounge"],
+      ["یوتیوب — Beginner Violin Lessons VLTC", "https://www.youtube.com/results?search_query=beginner+violin+lessons+VLTC"],
+    ] },
+  { title: "مرحله ۲ — اولین نت‌ها (هفته ۳-۶)",
+    items: [
+      "یادگیری نت‌خوانی پایه (خط حامل، نت‌های سیم A و D)",
+      "تمرین انگشت‌گذاری اول روی سیم A و D",
+      "نواختن گام‌های ساده (D Major, A Major)",
+      "تمرین روزانه ساختاریافته: پوسچر، نت، تکرار",
+    ],
+    resources: [["یوتیوب — Suzuki Book 1 lessons", "https://www.youtube.com/results?search_query=suzuki+violin+book+1+lesson+1"]] },
+  { title: "مرحله ۳ — آهنگ‌های ساده (هفته ۷-۱۲)",
+    items: [
+      "نواختن آهنگ‌های فولکلور ساده (Twinkle Twinkle, Ode to Joy)",
+      "شروع کار با هر چهار سیم",
+      "یادگیری ریتم‌های ساده‌تر",
+    ],
+    resources: [] }
+];
+
+const PYTHON_STAGES = [
+  { title: "مرحله ۱ — پایه (هفته ۱-۳)",
+    items: [
+      "نصب Python از python.org",
+      "نصب VS Code",
+      "متغیرها، انواع داده",
+      "ورودی و خروجی (print, input)",
+      "عملگرهای ریاضی و منطقی",
+    ],
+    resources: [["دوره رایگان مکتب‌خونه", "https://maktabkhooneh.org"]] },
+  { title: "مرحله ۲ — ساختارها (هفته ۴-۶)",
+    items: ["شرط‌ها if/elif/else", "حلقه‌های for و while", "لیست، دیکشنری، تاپل", "تابع ساده"],
+    resources: [] },
+  { title: "مرحله ۳ — پروژه اول (هفته ۷-۹)",
+    items: ["ساخت ماشین حساب یا لیست کارها", "کار با فایل txt", "آشنایی با Git/GitHub"],
+    resources: [] }
+];
+
+const ENGLISH_STAGES = [
+  { title: "مرحله ۱ — الفبا و کلمات پایه (هفته ۱-۲)",
+    items: ["مرور الفبا و صداها", "۱۰۰ کلمه پرکاربرد روزمره", "جمله‌سازی ساده I am / This is", "۱۵ دقیقه روزانه Duolingo"],
+    resources: [["Duolingo", "https://www.duolingo.com"], ["English with Lucy", "https://www.youtube.com/@EnglishwithLucy"]] },
+  { title: "مرحله ۲ — جملات روزمره (هفته ۳-۶)",
+    items: ["زمان حال ساده", "مکالمات روزمره ساده", "گوش دادن به پادکست سطح A1"],
+    resources: [["BBC 6 Minute English", "https://www.bbc.co.uk/learningenglish"]] },
+  { title: "مرحله ۳ — تقویت مهارت (هفته ۷-۱۲)",
+    items: ["زمان گذشته ساده", "۵ کلمه جدید در روز", "تماشای سریال ساده با زیرنویس انگلیسی"],
+    resources: [] }
+];
+
+let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0 }, items: {}, media: [] };
+let fb = null;
+let suppressNextSnapshot = false;
+
+function setSyncStatus(kind, text) {
+  document.getElementById("sync-dot").className = "dot " + kind;
+  document.getElementById("sync-text").textContent = text;
+}
+
+async function persist() {
+  if (!fb) return;
+  setSyncStatus("busy", "در حال ذخیره...");
+  try {
+    suppressNextSnapshot = true;
+    await fb.setDoc(fb.stateDocRef, state);
+    setSyncStatus("ok", "ذخیره شد و همگام‌سازی شد");
+  } catch (e) {
+    setSyncStatus("err", "خطا در ذخیره — بدون اینترنت؟");
+    console.error(e);
+  }
+}
+
+function initFirebaseSync() {
+  fb = window.__firebase;
+  setSyncStatus("busy", "در حال بار کردن داده...");
+
+  fb.onSnapshot(fb.stateDocRef, (snap) => {
+    if (suppressNextSnapshot) { suppressNextSnapshot = false; return; }
+    if (snap.exists()) {
+      state = snap.data();
+      if (!state.schedule) state.schedule = {};
+      if (!state.stages) state.stages = { violin: 0, python: 0, english: 0 };
+      if (!state.items) state.items = {};
+      if (!state.media) state.media = [];
+      render();
+      setSyncStatus("ok", "همگام‌سازی شد (تغییر از دستگاه دیگر)");
+    } else {
+      fb.setDoc(fb.stateDocRef, state);
+    }
+    document.getElementById("loading-screen").style.display = "none";
+  }, (err) => {
+    setSyncStatus("err", "اتصال برقرار نشد");
+    document.getElementById("loading-screen").style.display = "none";
+    console.error(err);
+  });
+}
+
+let activeTab = "schedule";
+
+function renderTabs(){
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.tab === activeTab);
+  });
+  document.querySelectorAll(".panel").forEach(p => {
+    p.classList.toggle("active", p.id === "panel-" + activeTab);
+  });
+}
+
+function renderSchedule() {
+  const key = todayKey();
+  const checked = state.schedule[key] || {};
+  const el = document.getElementById("panel-schedule");
+  let doneCount = 0;
+  let html = `<div class="card">`;
+  SCHEDULE.forEach((item, i) => {
+    const isDone = !!checked[i];
+    if (isDone) doneCount++;
+    html += `
+      <div class="row" style="padding:8px 0; ${i < SCHEDULE.length-1 ? 'border-bottom:0.5px solid #333' : ''}">
+        <input type="checkbox" data-idx="${i}" ${isDone ? "checked" : ""} />
+        <span class="time">${item[0]}</span>
+        <span class="task ${isDone ? 'done' : ''}">${item[1]}</span>
+      </div>`;
+  });
+  html += `</div>`;
+  const pct = Math.round((doneCount / SCHEDULE.length) * 100);
+  html = `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:#9a9890;">
+        <span>پیشرفت امروز</span><span>${doneCount} از ${SCHEDULE.length}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>` + html;
+  el.innerHTML = html;
+  el.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (!state.schedule[key]) state.schedule[key] = {};
+      state.schedule[key][cb.dataset.idx] = cb.checked;
+      persist();
+      renderSchedule();
+    });
+  });
+}
+
+function renderTrack(panelId, storageKey, stages) {
+  const currentStage = state.stages[storageKey] || 0;
+  const itemKey = storageKey + "-" + currentStage;
+  const checkedItems = state.items[itemKey] || {};
+  const el = document.getElementById(panelId);
+
+  let html = `<div class="card">
+    <span class="stage-badge">مرحله ${currentStage + 1} از ${stages.length}</span>
+    <div class="track-title">${stages[currentStage].title}</div>
+  </div>`;
+
+  stages[currentStage].items.forEach((item, i) => {
+    const isDone = !!checkedItems[i];
+    html += `
+      <div class="card row">
+        <input type="checkbox" data-item="${i}" ${isDone ? "checked" : ""} />
+        <span class="task ${isDone ? 'done' : ''}">${item}</span>
+      </div>`;
+  });
+
+  if (stages[currentStage].resources.length) {
+    html += `<div class="card"><div class="label-sm">منابع پیشنهادی</div>`;
+    stages[currentStage].resources.forEach(([label, url]) => {
+      html += `<a class="resource" href="${url}" target="_blank">→ ${label}</a>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="row" style="margin-top:12px; gap:8px;">`;
+  if (currentStage > 0) html += `<button data-action="prev">مرحله قبل</button>`;
+  if (currentStage < stages.length - 1) html += `<button data-action="next" class="primary">رفتن به مرحله بعد</button>`;
+  else html += `<span class="empty-msg">به آخرین مرحله ثبت‌شده رسیدی! 🎉</span>`;
+  html += `</div>`;
+
+  el.innerHTML = html;
+
+  el.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (!state.items[itemKey]) state.items[itemKey] = {};
+      state.items[itemKey][cb.dataset.item] = cb.checked;
+      persist();
+      renderTrack(panelId, storageKey, stages);
+    });
+  });
+  const nextBtn = el.querySelector('[data-action="next"]');
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    state.stages[storageKey] = currentStage + 1;
+    persist();
+    renderTrack(panelId, storageKey, stages);
+  });
+  const prevBtn = el.querySelector('[data-action="prev"]');
+  if (prevBtn) prevBtn.addEventListener("click", () => {
+    state.stages[storageKey] = currentStage - 1;
+    persist();
+    renderTrack(panelId, storageKey, stages);
+  });
+}
+
+function renderMedia() {
+  const entries = state.media || [];
+  const el = document.getElementById("panel-media");
+  let html = `
+    <div class="card">
+      <div class="label-sm">نوع</div>
+      <select id="m-type">
+        <option value="کتاب">کتاب</option>
+        <option value="فیلم">فیلم</option>
+        <option value="سریال">سریال</option>
+      </select>
+      <div class="label-sm">عنوان</div>
+      <input type="text" id="m-title" placeholder="اسم کتاب یا فیلم" />
+      <div class="label-sm">یادداشت کوتاه</div>
+      <textarea id="m-note" placeholder="حتی دو سه جمله کافیه..."></textarea>
+      <button class="primary" id="m-add" style="margin-top:8px;">ثبت کردن</button>
+    </div>
+  `;
+
+  if (entries.length === 0) {
+    html += `<div class="empty-msg">هنوز چیزی ثبت نکردی.</div>`;
+  } else {
+    const indexed = entries.map((e, i) => ({ ...e, idx: i }));
+    const sorted = indexed.sort((a,b) => b.date.localeCompare(a.date));
+    let lastDate = "";
+    sorted.forEach((e) => {
+      if (e.date !== lastDate) {
+        html += `<div class="day-divider">${e.date}</div>`;
+        lastDate = e.date;
+      }
+      html += `
+        <div class="card">
+          <div class="log-entry">
+            <div class="log-title">${e.title} <span class="log-meta">(${e.type})</span></div>
+            ${e.note ? `<div class="log-note">${e.note}</div>` : ""}
+            <div style="text-align:left; margin-top:6px;"><span class="delete-btn" data-idx="${e.idx}">حذف</span></div>
+          </div>
+        </div>`;
+    });
+  }
+
+  el.innerHTML = html;
+
+  document.getElementById("m-add").addEventListener("click", () => {
+    const title = document.getElementById("m-title").value.trim();
+    if (!title) return;
+    const type = document.getElementById("m-type").value;
+    const note = document.getElementById("m-note").value.trim();
+    if (!state.media) state.media = [];
+    state.media.push({ title, type, note, date: todayKey() });
+    persist();
+    renderMedia();
+  });
+
+  el.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.media.splice(parseInt(btn.dataset.idx), 1);
+      persist();
+      renderMedia();
+    });
+  });
+}
+
+function render() {
+  renderTabs();
+  renderSchedule();
+  renderTrack("panel-violin", "violin", VIOLIN_STAGES);
+  renderTrack("panel-python", "python", PYTHON_STAGES);
+  renderTrack("panel-english", "english", ENGLISH_STAGES);
+  renderMedia();
+}
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    activeTab = tab.dataset.tab;
+    renderTabs();
+  });
+});
+
+document.getElementById("today-date").textContent = new Date().toLocaleDateString("fa-IR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+window.addEventListener("firebase-ready", initFirebaseSync);
+if (window.__firebaseReady) initFirebaseSync();
+</script>
+</body>
+</html>

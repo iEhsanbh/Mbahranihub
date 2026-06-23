@@ -153,6 +153,7 @@
   <div class="tab" data-tab="violin">ویولن</div>
   <div class="tab" data-tab="python">پایتون</div>
   <div class="tab" data-tab="english">انگلیسی</div>
+  <div class="tab" data-tab="acting">بازیگری</div>
   <div class="tab" data-tab="media">کتاب و فیلم</div>
 </div>
 
@@ -160,6 +161,7 @@
 <div class="panel" id="panel-violin"></div>
 <div class="panel" id="panel-python"></div>
 <div class="panel" id="panel-english"></div>
+<div class="panel" id="panel-acting"></div>
 <div class="panel" id="panel-media"></div>
 
 <script>
@@ -177,7 +179,8 @@ const SCHEDULE = [
   ["۱۴:۳۰", "استراحت کوتاه"],
   ["۱۴:۴۵", "ویولن (بخش ۲)"],
   ["۱۶:۰۰", "کتاب خوندن (همراه موزیک)"],
-  ["۱۷:۰۰", "وقت آزاد / پیاده‌روی"],
+  ["۱۷:۰۰", "تمرین بازیگری / مونولوگ"],
+  ["۱۸:۰۰", "وقت آزاد / پیاده‌روی"],
   ["۱۹:۰۰", "شام"],
   ["۲۰:۰۰", "فیلم یا سریال"],
   ["۲۲:۰۰", "کتاب خوندن یا وقت آزاد"],
@@ -244,7 +247,52 @@ const ENGLISH_STAGES = [
     resources: [] }
 ];
 
-let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0 }, items: {}, media: [] };
+const ACTING_STAGES = [
+  { title: "مرحله ۱ — تقویت پایه بدن و صدا (هفته ۱-۳)",
+    items: [
+      "تمرین روزانه گرم‌کردن بدن قبل از تمرین (۱۰ دقیقه کشش و حرکت آزاد)",
+      "تمرین تنفس دیافراگمی برای پروجکشن صدا روی صحنه",
+      "تمرین آرتیکولاسیون (تمرین تانگ‌تویستر فارسی، روزی ۵ دقیقه)",
+      "ضبط صدای خودت موقع خوندن یه متن کوتاه و گوش دادن مجدد برای اصلاح",
+    ],
+    resources: [
+      ["یوتیوب — تمرینات گرم کردن صدا برای بازیگری", "https://www.youtube.com/results?search_query=%D8%AA%D9%85%D8%B1%DB%8C%D9%86+%D8%B1%D8%B5%D8%A7%DB%8C%DB%8C+%D8%B5%D8%AF%D8%A7+%D8%A8%D8%B1%D8%A7%DB%8C+%D8%A8%D8%A7%D8%B2%DB%8C%DA%AF%D8%B1%DB%8C"],
+    ] },
+  { title: "مرحله ۲ — تحلیل و اجرای مونولوگ (هفته ۴-۷)",
+    items: [
+      "انتخاب یه مونولوگ کوتاه (۱-۲ دقیقه) از یه نمایشنامه‌ای که داری (مثلاً از کتاب‌های تئاتری لیستت)",
+      "تحلیل متن: هدف کاراکتر در این لحظه چیه؟ مانعش چیه؟",
+      "حفظ کردن متن به‌صورت طبیعی (نه مکانیکی) — تکرار با تغییر تمرکز هر بار",
+      "ضبط ویدیوی اجرا و دیدن دوباره با نگاه نقادانه",
+    ],
+    resources: [] },
+  { title: "مرحله ۳ — تمرین صحنه با محرک‌های واقعی (هفته ۸-۱۲)",
+    items: [
+      "تمرین «اتود» — صحنه‌سازی بداهه بر اساس یه شرایط ساده (مثلاً: منتظر کسی هستی که نمیاد)",
+      "کار روی یه صحنه دو نفره با یه همکار یا دوست (حتی آنلاین/ویدیوکال)",
+      "تمرین گوش دادن واقعی به پارتنر صحنه، نه فقط منتظر نوبت حرف زدن",
+      "بازبینی یکی از فیلم‌های لیستت با تمرکز روی بازی یه اکتور خاص (تحلیل تکنیک، نه فقط تماشا)",
+    ],
+    resources: [
+      ["کتاب پیشنهادی از لیست خودت برای این مرحله: «بازیگری ۱ و ۲»", ""],
+    ] }
+];
+
+let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0, acting: 0 }, items: {}, media: [], readBooks: {} };
+
+const BOOK_QUEUE = [
+  { category: "✨ کلاسیک جهانی (شروع پیشنهادی)", books: ["شازده کوچولو", "کیمیاگر", "سه‌شنبه‌ها با موری", "۱۹۸۴", "دنیای سوفی", "گوژپشت نتردام", "انسان در جستجوی معنا", "عقاید یک دلقک", "گربه‌ای که ذن یاد می داد", "رستاخیز", "صد سال تنهایی", "بیمار انگلیسی", "هزار خورشید تابان", "بادبادک‌باز"] },
+  { category: "📖 رمان نوجوان / فانتزی", books: ["جودی انجمن مخفی تشکیل می‌دهد", "جودی و فهرست آرزوها", "عمارت مرموز", "دختری که ماه را نوشید", "افعی و بال‌های شب", "شاهین‌ها و بشکه باروت", "قلعه حیوانات", "بابا لنگ‌دراز", "نایت ساید ۱", "نایت ساید ۲", "شهر نقاب‌ها", "لیست مهمان‌ها", "آیریس", "مگنس چیس و اساطیر ازگارد", "مومو"] },
+  { category: "🇮🇷 صادق هدایت و معاصرین", books: ["بوف کور", "زنده به گور", "سگ ولگرد", "توپ مرواری", "سه قطره خون", "علویه خانم", "حاجی آقا", "سووشون", "دودمان", "در یتیم", "سلوک", "چشمهایش", "جای خالی سلوچ", "سمفونی مردگان", "تماما مخصوص", "سال بلوا", "شوهر آهوخانم", "دا", "سپیده دمان", "سایه روشن", "دو قرن سکوت"] },
+  { category: "🇮🇷 ادبیات و داستان معاصر", books: ["نمازخانه کوچک من", "از قیطریه تا اورنج کانتی", "باغ استخوان‌های نمور", "درخت انجیر معابد", "تنگسیر", "تو در قاهره خواهی مرد", "دنیای خیالی تنهایی های من", "ورق پارهای زندان", "خانه پدری", "سکوت شب", "بهلول", "متن کامل قصه‌های صمد بهرنگی", "خط خون", "رنگ آسمان به شکل قلب است"] },
+  { category: "🗡️ جنایی / روان‌شناختی", books: ["ماتیلدا", "موش‌ها و آدم‌ها", "آدم‌کش‌ها", "مربای شیرین"] },
+  { category: "📜 تاریخ ایران", books: ["تاریخ ایران کمبریج", "ایران باستان", "تاریخ طبری", "کوروش کبیر", "نادرشاه افشار", "بابک خرمدین", "فراماسونری و سیاست‌های جاسوسی در ایران", "تاریخ سینمای بوشهر"] },
+  { category: "🏛️ فلسفه و اساطیر", books: ["ایلیاد", "فلسفه اخلاق", "داراب‌نامه"] },
+  { category: "🎭 تئاتر و نمایش", books: ["متادرام در نمایشنامه", "سر کلاس با کیارستمی", "کیوگن", "مجلس قربانی سنمار", "حکایت شهر سنگی و گوهر پنهان", "آقای باکلاه آقای بی کلاه", "رمولوس کبیر", "بازیگری ۱ و ۲", "اصول کارگردانی نمایش", "بداهه پردازی برای تئاتر", "دراماتورژی انقلاب در تئاتر"] },
+  { category: "🗣️ مهارت‌های فردی", books: ["مهارت‌های سخنرانی", "حرفه‌ای سخن بگویید", "رهبری", "جامعه شناسی خودمانی", "خسرو خوبان"] },
+  { category: "🩺 مرجع", books: ["راهنمای پزشکی خانواده"] },
+  { category: "🐼 کوتاه و سرگرم‌کننده", books: ["پاندای بزرگ و اژدهای کوچک", "دید و بازدید", "جشن نیکوکاری", "هنر طبیعت", "نئودوربون"] },
+];
 let fb = null;
 let pendingSaveTimer = null;
 let firstSnapshotHandled = false;
@@ -257,9 +305,11 @@ function setSyncStatus(kind, text) {
 function mergeDefaults(data) {
   data = data || {};
   if (!data.schedule) data.schedule = {};
-  if (!data.stages) data.stages = { violin: 0, python: 0, english: 0 };
+  if (!data.stages) data.stages = { violin: 0, python: 0, english: 0, acting: 0 };
+  if (data.stages.acting === undefined) data.stages.acting = 0;
   if (!data.items) data.items = {};
   if (!data.media) data.media = [];
+  if (!data.readBooks) data.readBooks = {};
   return data;
 }
 
@@ -417,8 +467,25 @@ function renderTrack(panelId, storageKey, stages) {
 
 function renderMedia() {
   const entries = state.media || [];
+  const readBooks = state.readBooks || {};
   const el = document.getElementById("panel-media");
-  let html = `
+
+  let queueHtml = `<div class="card"><div class="track-title" style="margin-bottom:8px;">فهرست کتاب‌های تو (دسته‌بندی‌شده)</div>`;
+  BOOK_QUEUE.forEach((cat, ci) => {
+    queueHtml += `<div class="label-sm" style="margin-top:10px; color:#cecbf6;">${cat.category}</div>`;
+    cat.books.forEach((book, bi) => {
+      const key = ci + "-" + bi;
+      const isRead = !!readBooks[key];
+      queueHtml += `
+        <div class="row" style="padding:4px 0;">
+          <input type="checkbox" data-book="${key}" data-title="${book}" ${isRead ? "checked" : ""} style="width:18px;height:18px;" />
+          <span style="font-size:13px; ${isRead ? 'text-decoration:line-through;color:#6a6860;' : ''}">${book}</span>
+        </div>`;
+    });
+  });
+  queueHtml += `</div>`;
+
+  let html = queueHtml + `
     <div class="card">
       <div class="label-sm">نوع</div>
       <select id="m-type">
@@ -458,6 +525,19 @@ function renderMedia() {
 
   el.innerHTML = html;
 
+  el.querySelectorAll("[data-book]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (!state.readBooks) state.readBooks = {};
+      state.readBooks[cb.dataset.book] = cb.checked;
+      if (cb.checked) {
+        if (!state.media) state.media = [];
+        state.media.push({ title: cb.dataset.title, type: "کتاب", note: "", date: todayKey() });
+      }
+      persist();
+      renderMedia();
+    });
+  });
+
   document.getElementById("m-add").addEventListener("click", () => {
     const title = document.getElementById("m-title").value.trim();
     if (!title) return;
@@ -484,6 +564,7 @@ function render() {
   renderTrack("panel-violin", "violin", VIOLIN_STAGES);
   renderTrack("panel-python", "python", PYTHON_STAGES);
   renderTrack("panel-english", "english", ENGLISH_STAGES);
+  renderTrack("panel-acting", "acting", ACTING_STAGES);
   renderMedia();
 }
 

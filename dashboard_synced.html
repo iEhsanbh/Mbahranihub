@@ -7,7 +7,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBmfzGi_meuxUL6G9o0X5u3fufWEheuSWo",
@@ -23,19 +23,50 @@
   const auth = getAuth(app);
   const stateDocRef = doc(db, "dashboard", "state");
 
-  // Sign in anonymously so Firestore rules can check request.auth.uid.
-  // Once signed in, the same UID persists in this browser (and you can copy
-  // it into your security rules to lock the document to just this account).
+  function showLoginForm(errorMsg) {
+    const loginEl = document.getElementById("login-screen");
+    const appEl = document.getElementById("app-root");
+    loginEl.style.display = "flex";
+    appEl.style.display = "none";
+    const errEl = document.getElementById("login-error");
+    errEl.textContent = errorMsg || "";
+  }
+
+  function hideLoginForm() {
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app-root").style.display = "block";
+  }
+
   onAuthStateChanged(auth, (user) => {
     if (user) {
-      console.log("Firebase UID:", user.uid); // copy this into firestore.rules once
+      hideLoginForm();
       window.__firebase = { db, stateDocRef, getDoc, setDoc, onSnapshot };
       window.__firebaseReady = true;
       window.dispatchEvent(new Event("firebase-ready"));
     } else {
-      signInAnonymously(auth).catch((err) => console.error("Auth error:", err));
+      showLoginForm();
     }
   });
+
+  setPersistence(auth, browserLocalPersistence).catch((err) => console.error("Persistence error:", err));
+
+  window.__doLogin = (email, password) => {
+    const btn = document.getElementById("login-btn");
+    btn.disabled = true;
+    btn.textContent = "در حال ورود...";
+    signInWithEmailAndPassword(auth, email, password)
+      .catch((err) => {
+        console.error("Login error:", err);
+        let msg = "ایمیل یا رمز اشتباهه. دوباره امتحان کن.";
+        if (err.code === "auth/invalid-email") msg = "فرمت ایمیل درست نیست.";
+        if (err.code === "auth/too-many-requests") msg = "خیلی تلاش کردی — چند دقیقه صبر کن.";
+        showLoginForm(msg);
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = "ورود";
+      });
+  };
 </script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -145,9 +176,30 @@
   .empty-msg { color: #6a6860; font-size: 14px; text-align: center; padding: 20px 0; }
   .delete-btn { color: #e24b4a; cursor: pointer; font-size: 12px; }
   .day-divider { font-size: 12px; color: #6a6860; margin: 16px 0 8px; text-transform: uppercase; }
+  .login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 80vh;
+  }
+  .login-box { width: 100%; max-width: 320px; text-align: center; }
+  .login-box h1 { font-size: 20px; margin-bottom: 4px; }
+  .login-box .sub { margin-bottom: 24px; }
+  .login-error { color: #e24b4a; font-size: 13px; min-height: 18px; margin-top: 8px; }
 </style>
 </head>
 <body>
+
+<div class="login-screen" id="login-screen" style="display:none;">
+  <div class="login-box">
+    <h1>میزکار روزانه</h1>
+    <div class="sub">برای دیدن داشبورد، وارد شو</div>
+    <input type="email" id="login-email" placeholder="ایمیل" autocomplete="username" />
+    <input type="password" id="login-password" placeholder="رمز عبور" autocomplete="current-password" />
+    <button class="primary" id="login-btn" style="margin-top:10px; width:100%;">ورود</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<div id="app-root" style="display:none;">
 
 <h1>میزکار روزانه</h1>
 <div class="sub" id="today-date"></div>
@@ -699,23 +751,43 @@ document.querySelectorAll(".tab").forEach(tab => {
   });
 });
 
-document.getElementById("today-date").textContent = new Date().toLocaleDateString("fa-IR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+document.getElementById("login-btn").addEventListener("click", () => {
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (!email || !password) return;
+  window.__doLogin(email, password);
+});
 
-// نمایش فوری صفحه با مقادیر پیش‌فرض، بدون منتظر ماندن برای اتصال فایربیس.
-// اگه اتصال موفق بشه، render() دوباره با داده‌ی واقعی صدا زده می‌شه (در initFirebaseSync).
-// اگه اتصال شکست بخوره یا طول بکشه، حداقل صفحه خالی نمی‌مونه.
-render();
+[document.getElementById("login-email"), document.getElementById("login-password")].forEach(input => {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("login-btn").click();
+  });
+});
+
+document.getElementById("today-date").textContent = new Date().toLocaleDateString("fa-IR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
 window.addEventListener("firebase-ready", initFirebaseSync);
 if (window.__firebaseReady) initFirebaseSync();
 
-// اگه بعد از ۸ ثانیه هنوز هیچ پاسخی (موفق یا خطا) از فایربیس نیومده باشه،
-// به کاربر بگو که آفلاین کار می‌کنه (بدون اینکه چیزی رو قفل کند، چون render() از قبل اجرا شده).
+// اگه بعد از ۸ ثانیه از وصل شدن، هنوز هیچ پاسخی (موفق یا خطا) از فایربیس نیومده باشه،
+// به کاربر بگو که آفلاین کار می‌کنه (بدون اینکه چیزی رو قفل کند، چون render() قبلاً اجرا شده).
 setTimeout(() => {
-  if (!firstSnapshotHandled) {
+  if (window.__firebaseReady && !firstSnapshotHandled) {
     setSyncStatus("err", "اتصال طول کشید — آفلاین کار می‌کنی، تغییراتت بعداً همگام می‌شه");
   }
 }, 8000);
+
+// اگه ماژول فایربیس اصلاً لود نشه (مثلاً قطعی اینترنت یا مسدود بودن اسکریپت)،
+// onAuthStateChanged هیچ‌وقت صدا زده نمی‌شه. بعد از ۶ ثانیه، اگه هنوز هیچ خبری
+// از فایربیس نبود، فرم ورود رو با یه پیام خطا نشون بده تا کاربر گیر نکنه.
+setTimeout(() => {
+  if (!window.__firebaseReady) {
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("login-error").textContent = "اتصال به سرویس ورود برقرار نشد. اینترنتت رو چک کن و صفحه رو رفرش کن.";
+  }
+}, 6000);
 </script>
+
+</div>
 </body>
 </html>

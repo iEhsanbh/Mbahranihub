@@ -7,6 +7,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBmfzGi_meuxUL6G9o0X5u3fufWEheuSWo",
@@ -19,16 +20,27 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
   const stateDocRef = doc(db, "dashboard", "state");
 
-  // Expose to the non-module script below
-  window.__firebase = { db, stateDocRef, getDoc, setDoc, onSnapshot };
-  window.__firebaseReady = true;
-  window.dispatchEvent(new Event("firebase-ready"));
+  // Sign in anonymously so Firestore rules can check request.auth.uid.
+  // Once signed in, the same UID persists in this browser (and you can copy
+  // it into your security rules to lock the document to just this account).
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      console.log("Firebase UID:", user.uid); // copy this into firestore.rules once
+      window.__firebase = { db, stateDocRef, getDoc, setDoc, onSnapshot };
+      window.__firebaseReady = true;
+      window.dispatchEvent(new Event("firebase-ready"));
+    } else {
+      signInAnonymously(auth).catch((err) => console.error("Auth error:", err));
+    }
+  });
 </script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
+    direction: rtl;
     font-family: Tahoma, 'Vazirmatn', sans-serif;
     background: #1a1a1f;
     color: #e8e6e0;
@@ -154,7 +166,8 @@
   <div class="tab" data-tab="python">پایتون</div>
   <div class="tab" data-tab="english">انگلیسی</div>
   <div class="tab" data-tab="acting">بازیگری</div>
-  <div class="tab" data-tab="media">کتاب و فیلم</div>
+  <div class="tab" data-tab="books">کتاب‌ها</div>
+  <div class="tab" data-tab="media">فیلم و سریال</div>
 </div>
 
 <div class="panel active" id="panel-schedule"></div>
@@ -162,6 +175,7 @@
 <div class="panel" id="panel-python"></div>
 <div class="panel" id="panel-english"></div>
 <div class="panel" id="panel-acting"></div>
+<div class="panel" id="panel-books"></div>
 <div class="panel" id="panel-media"></div>
 
 <script>
@@ -278,7 +292,23 @@ const ACTING_STAGES = [
     ] }
 ];
 
-let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0, acting: 0 }, items: {}, media: [], readBooks: {} };
+// ترتیب پیشنهادی مطالعه: از عملی و کاربردی‌تر شروع می‌کنیم (چیزی که مستقیم تمرین رو تغذیه می‌کنه)،
+// بعد می‌ریم سمت متن‌های نمایشی برای تمرین مونولوگ/تحلیل کاراکتر، و آخر سر کتاب‌های نظری/تخصصی‌تر.
+const THEATER_BOOKS = [
+  { order: 1, title: "بازیگری ۱ و ۲", why: "نقطه شروع منطقی — کتاب تکنیک عملی بازیگریه، مستقیم به تمرین‌های مرحله ۱ و ۲ همین تب وصل می‌شه." },
+  { order: 2, title: "بداهه پردازی برای تئاتر", why: "بعد از تکنیک پایه، بداهه‌پردازی دقیقاً همون چیزیه که در مرحله ۳ (تمرین اتود) لازمش داری." },
+  { order: 3, title: "آقای باکلاه آقای بی کلاه", why: "یک نمایشنامه‌ست — برای تحلیل کاراکتر و انتخاب مونولوگ کوتاه در مرحله ۲ مناسبه." },
+  { order: 4, title: "رمولوس کبیر", why: "نمایشنامه‌ی کلاسیک‌تر (دورنمات) — بعد از یک نمایشنامه ساده‌تر، گام بعدی خوبیه برای تحلیل متن." },
+  { order: 5, title: "حکایت شهر سنگی و گوهر پنهان", why: "ادامه‌ی مسیر آشنایی با متون نمایشی ایرانی، در کنار نمایشنامه‌های قبلی." },
+  { order: 6, title: "سر کلاس با کیارستمی", why: "یادداشت‌های کلاس یک استاد — دیدگاهی غیرمستقیم اما الهام‌بخش به کارگردانی و نگاه به اجرا." },
+  { order: 7, title: "اصول کارگردانی نمایش", why: "وقتی پایه‌ی بازیگری جا افتاد، فهمیدن نگاه کارگردان به صحنه کمکت می‌کنه عمیق‌تر بازی کنی." },
+  { order: 8, title: "دراماتورژی انقلاب در تئاتر", why: "نظری‌تر و تخصصی‌تره — بهتره بعد از آشنایی با اجرا و کارگردانی سراغش بری." },
+  { order: 9, title: "متادرام در نمایشنامه", why: "مفهومی و انتزاعی (نمایش درباره‌ی نمایش) — برای وقتیه که با ساختار نمایشنامه راحت شدی." },
+  { order: 10, title: "کیوگن", why: "فرم نمایشی کلاسیک ژاپنی — تخصصی و خاص، برای گسترش دید نه تمرین روزمره." },
+  { order: 11, title: "مجلس قربانی سنمار", why: "نمایشنامه‌ی خاص‌تر — مناسب وقتی با چند نمایشنامه‌ی دیگه قبلاً کار کردی." },
+];
+
+let state = { schedule: {}, stages: { violin: 0, python: 0, english: 0, acting: 0 }, items: {}, media: [], books: [], readBooks: {}, readTheaterBooks: {} };
 
 const BOOK_QUEUE = [
   { category: "✨ کلاسیک جهانی (شروع پیشنهادی)", books: ["شازده کوچولو", "کیمیاگر", "سه‌شنبه‌ها با موری", "۱۹۸۴", "دنیای سوفی", "گوژپشت نتردام", "انسان در جستجوی معنا", "عقاید یک دلقک", "گربه‌ای که ذن یاد می داد", "رستاخیز", "صد سال تنهایی", "بیمار انگلیسی", "هزار خورشید تابان", "بادبادک‌باز"] },
@@ -288,7 +318,6 @@ const BOOK_QUEUE = [
   { category: "🗡️ جنایی / روان‌شناختی", books: ["ماتیلدا", "موش‌ها و آدم‌ها", "آدم‌کش‌ها", "مربای شیرین"] },
   { category: "📜 تاریخ ایران", books: ["تاریخ ایران کمبریج", "ایران باستان", "تاریخ طبری", "کوروش کبیر", "نادرشاه افشار", "بابک خرمدین", "فراماسونری و سیاست‌های جاسوسی در ایران", "تاریخ سینمای بوشهر"] },
   { category: "🏛️ فلسفه و اساطیر", books: ["ایلیاد", "فلسفه اخلاق", "داراب‌نامه"] },
-  { category: "🎭 تئاتر و نمایش", books: ["متادرام در نمایشنامه", "سر کلاس با کیارستمی", "کیوگن", "مجلس قربانی سنمار", "حکایت شهر سنگی و گوهر پنهان", "آقای باکلاه آقای بی کلاه", "رمولوس کبیر", "بازیگری ۱ و ۲", "اصول کارگردانی نمایش", "بداهه پردازی برای تئاتر", "دراماتورژی انقلاب در تئاتر"] },
   { category: "🗣️ مهارت‌های فردی", books: ["مهارت‌های سخنرانی", "حرفه‌ای سخن بگویید", "رهبری", "جامعه شناسی خودمانی", "خسرو خوبان"] },
   { category: "🩺 مرجع", books: ["راهنمای پزشکی خانواده"] },
   { category: "🐼 کوتاه و سرگرم‌کننده", books: ["پاندای بزرگ و اژدهای کوچک", "دید و بازدید", "جشن نیکوکاری", "هنر طبیعت", "نئودوربون"] },
@@ -309,7 +338,9 @@ function mergeDefaults(data) {
   if (data.stages.acting === undefined) data.stages.acting = 0;
   if (!data.items) data.items = {};
   if (!data.media) data.media = [];
+  if (!data.books) data.books = [];
   if (!data.readBooks) data.readBooks = {};
+  if (!data.readTheaterBooks) data.readTheaterBooks = {};
   return data;
 }
 
@@ -443,34 +474,79 @@ function renderTrack(panelId, storageKey, stages) {
 
   el.innerHTML = html;
 
+  const rerender = () => {
+    renderTrack(panelId, storageKey, stages);
+    if (panelId === "panel-acting") renderTheaterBooks();
+  };
+
   el.querySelectorAll("input[type=checkbox]").forEach(cb => {
     cb.addEventListener("change", () => {
       if (!state.items[itemKey]) state.items[itemKey] = {};
       state.items[itemKey][cb.dataset.item] = cb.checked;
       persist();
-      renderTrack(panelId, storageKey, stages);
+      rerender();
     });
   });
   const nextBtn = el.querySelector('[data-action="next"]');
   if (nextBtn) nextBtn.addEventListener("click", () => {
     state.stages[storageKey] = currentStage + 1;
     persist();
-    renderTrack(panelId, storageKey, stages);
+    rerender();
   });
   const prevBtn = el.querySelector('[data-action="prev"]');
   if (prevBtn) prevBtn.addEventListener("click", () => {
     state.stages[storageKey] = currentStage - 1;
     persist();
-    renderTrack(panelId, storageKey, stages);
+    rerender();
   });
 }
 
-function renderMedia() {
-  const entries = state.media || [];
-  const readBooks = state.readBooks || {};
-  const el = document.getElementById("panel-media");
+function renderTheaterBooks() {
+  const readTheaterBooks = state.readTheaterBooks || {};
+  const el = document.getElementById("panel-acting");
 
-  let queueHtml = `<div class="card"><div class="track-title" style="margin-bottom:8px;">فهرست کتاب‌های تو (دسته‌بندی‌شده)</div>`;
+  let html = `<div class="card">
+    <div class="track-title" style="margin-bottom:2px;">📚 کتاب‌های تئاتر و بازیگری</div>
+    <div class="label-sm" style="margin-bottom:8px;">به ترتیب پیشنهادی مطالعه — از عملی‌ترین شروع کن</div>
+  </div>`;
+
+  const sorted = [...THEATER_BOOKS].sort((a, b) => a.order - b.order);
+  sorted.forEach((book) => {
+    const isRead = !!readTheaterBooks[book.order];
+    html += `
+      <div class="card">
+        <div class="row" style="align-items:flex-start;">
+          <input type="checkbox" data-tbook="${book.order}" ${isRead ? "checked" : ""} style="margin-top:2px;" />
+          <div style="flex:1;">
+            <div class="task ${isRead ? 'done' : ''}" style="display:flex; align-items:center; gap:6px;">
+              <span class="stage-badge" style="margin:0; padding:2px 8px;">${book.order}</span>
+              ${book.title}
+            </div>
+            <div class="log-note" style="margin-top:4px;">${book.why}</div>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  el.insertAdjacentHTML("beforeend", html);
+
+  el.querySelectorAll("[data-tbook]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (!state.readTheaterBooks) state.readTheaterBooks = {};
+      state.readTheaterBooks[cb.dataset.tbook] = cb.checked;
+      persist();
+      renderTrack("panel-acting", "acting", ACTING_STAGES);
+      renderTheaterBooks();
+    });
+  });
+}
+
+function renderBooks() {
+  const readBooks = state.readBooks || {};
+  const entries = state.books || [];
+  const el = document.getElementById("panel-books");
+
+  let queueHtml = `<div class="card"><div class="track-title" style="margin-bottom:2px;">فهرست کتاب‌های تو (دسته‌بندی‌شده)</div><div class="label-sm" style="margin-bottom:8px;">تیک بزن وقتی خوندیش — خودش به یادداشت‌های پایین اضافه می‌شه</div>`;
   BOOK_QUEUE.forEach((cat, ci) => {
     queueHtml += `<div class="label-sm" style="margin-top:10px; color:#cecbf6;">${cat.category}</div>`;
     cat.books.forEach((book, bi) => {
@@ -487,14 +563,83 @@ function renderMedia() {
 
   let html = queueHtml + `
     <div class="card">
+      <div class="label-sm">عنوان کتاب (خارج از لیست بالا)</div>
+      <input type="text" id="b-title" placeholder="اسم کتاب" />
+      <div class="label-sm">یادداشت کوتاه</div>
+      <textarea id="b-note" placeholder="حتی دو سه جمله کافیه..."></textarea>
+      <button class="primary" id="b-add" style="margin-top:8px;">ثبت کردن</button>
+    </div>
+  `;
+
+  if (entries.length === 0) {
+    html += `<div class="empty-msg">هنوز یادداشتی برای کتاب‌ها ثبت نکردی.</div>`;
+  } else {
+    const indexed = entries.map((e, i) => ({ ...e, idx: i }));
+    const sorted = indexed.sort((a,b) => b.date.localeCompare(a.date));
+    let lastDate = "";
+    sorted.forEach((e) => {
+      if (e.date !== lastDate) {
+        html += `<div class="day-divider">${e.date}</div>`;
+        lastDate = e.date;
+      }
+      html += `
+        <div class="card">
+          <div class="log-entry">
+            <div class="log-title">${e.title}</div>
+            ${e.note ? `<div class="log-note">${e.note}</div>` : ""}
+            <div style="text-align:left; margin-top:6px;"><span class="delete-btn" data-bidx="${e.idx}">حذف</span></div>
+          </div>
+        </div>`;
+    });
+  }
+
+  el.innerHTML = html;
+
+  el.querySelectorAll("[data-book]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (!state.readBooks) state.readBooks = {};
+      state.readBooks[cb.dataset.book] = cb.checked;
+      if (cb.checked) {
+        if (!state.books) state.books = [];
+        state.books.push({ title: cb.dataset.title, note: "", date: todayKey() });
+      }
+      persist();
+      renderBooks();
+    });
+  });
+
+  document.getElementById("b-add").addEventListener("click", () => {
+    const title = document.getElementById("b-title").value.trim();
+    if (!title) return;
+    const note = document.getElementById("b-note").value.trim();
+    if (!state.books) state.books = [];
+    state.books.push({ title, note, date: todayKey() });
+    persist();
+    renderBooks();
+  });
+
+  el.querySelectorAll("[data-bidx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.books.splice(parseInt(btn.dataset.bidx), 1);
+      persist();
+      renderBooks();
+    });
+  });
+}
+
+function renderMedia() {
+  const entries = state.media || [];
+  const el = document.getElementById("panel-media");
+
+  let html = `
+    <div class="card">
       <div class="label-sm">نوع</div>
       <select id="m-type">
-        <option value="کتاب">کتاب</option>
         <option value="فیلم">فیلم</option>
         <option value="سریال">سریال</option>
       </select>
       <div class="label-sm">عنوان</div>
-      <input type="text" id="m-title" placeholder="اسم کتاب یا فیلم" />
+      <input type="text" id="m-title" placeholder="اسم فیلم یا سریال" />
       <div class="label-sm">یادداشت کوتاه</div>
       <textarea id="m-note" placeholder="حتی دو سه جمله کافیه..."></textarea>
       <button class="primary" id="m-add" style="margin-top:8px;">ثبت کردن</button>
@@ -525,19 +670,6 @@ function renderMedia() {
 
   el.innerHTML = html;
 
-  el.querySelectorAll("[data-book]").forEach(cb => {
-    cb.addEventListener("change", () => {
-      if (!state.readBooks) state.readBooks = {};
-      state.readBooks[cb.dataset.book] = cb.checked;
-      if (cb.checked) {
-        if (!state.media) state.media = [];
-        state.media.push({ title: cb.dataset.title, type: "کتاب", note: "", date: todayKey() });
-      }
-      persist();
-      renderMedia();
-    });
-  });
-
   document.getElementById("m-add").addEventListener("click", () => {
     const title = document.getElementById("m-title").value.trim();
     if (!title) return;
@@ -565,6 +697,8 @@ function render() {
   renderTrack("panel-python", "python", PYTHON_STAGES);
   renderTrack("panel-english", "english", ENGLISH_STAGES);
   renderTrack("panel-acting", "acting", ACTING_STAGES);
+  renderTheaterBooks();
+  renderBooks();
   renderMedia();
 }
 
